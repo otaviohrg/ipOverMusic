@@ -5,7 +5,14 @@
 #ifndef IPOVERMUSIC_DROPBOX_H
 #define IPOVERMUSIC_DROPBOX_H
 
+enum identity {
+    CLIENT,
+    SERVER
+};
+typedef enum identity identity;
+
 struct dropbox_client {
+    identity id;
     char* client_id;
     char* client_secret;
     char* authorization_code;
@@ -25,5 +32,8 @@ typedef struct dropbox_client dropbox_client;
 */
 
 int auth(dropbox_client* client, char* client_id, char* client_secret, char* authorization_code);
+
+int upload_file(dropbox_client* client, char* file_path, char* message_id);
+
 
 #endif //IPOVERMUSIC_DROPBOX_H

@@ -23,17 +23,26 @@ int main(int argc, char* argv[]) {
     }
 
     dropbox_client client;
+    client.id = CLIENT;
     char *client_id = argv[1];
     char *client_secret = argv[2];
     char *auth_code = argv[3];
+    char *bearer_token = argv[4];
 
-    if(auth(&client, client_id, client_secret, auth_code)){
-        printf("Authentication error\n");
-        return -1;
+    if(bearer_token == NULL){
+        if(auth(&client, client_id, client_secret, auth_code)){
+            printf("Authentication error\n");
+            return -1;
+        }
+    } else{
+        client.bearer_token = (char *) malloc(strlen(bearer_token));
+        strcpy(client.bearer_token, bearer_token);
     }
 
-    printf("\nOUT\n");
     printf("%s\n", client.bearer_token);
+
+    upload_file(&client, "Test.png", "Test.png");
+
     return 1;
 
 }
