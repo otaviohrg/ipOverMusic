@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Werror
-LDFLAGS = -lpulse-simple -lpulse -lm
+LDFLAGS = -lpulse-simple -lpulse -lm -lcurl
 
 SRC_DIR = src
 LIB_DIR = lib
@@ -12,20 +12,22 @@ CLIENT_SRC = client.c
 SERVER_SRC = server.c
 AUDIO_SRC = $(SRC_DIR)/audio.c
 PACKET_SRC = $(SRC_DIR)/packet.c
+DROPBOX_SRC = $(SRC_DIR)/dropbox.c
 
 CLIENT_OBJ = $(CLIENT_SRC:.c=.o)
 SERVER_OBJ = $(SERVER_SRC:.c=.o)
 AUDIO_OBJ = $(AUDIO_SRC:.c=.o)
 PACKET_OBJ = $(PACKET_SRC:.c=.o)
+DROPBOX_OBJ = $(DROPBOX_SRC:.c=.o)
 
 .PHONY: all clean
 
 all: client server
 
-client: $(CLIENT_OBJ) $(AUDIO_OBJ) $(PACKET_OBJ)
+client: $(CLIENT_OBJ) $(AUDIO_OBJ) $(PACKET_OBJ) $(DROPBOX_OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-server: $(SERVER_OBJ) $(AUDIO_OBJ) $(PACKET_OBJ)
+server: $(SERVER_OBJ) $(AUDIO_OBJ) $(PACKET_OBJ) $(DROPBOX_OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 $(CLIENT_OBJ): $(CLIENT_SRC)
@@ -40,5 +42,9 @@ $(AUDIO_OBJ): $(AUDIO_SRC)
 $(PACKET_OBJ): $(PACKET_SRC)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+$(DROPBOX_OBJ): $(DROPBOX_SRC)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+
 clean:
-	rm -f $(CLIENT) $(SERVER) $(CLIENT_OBJ) $(SERVER_OBJ) $(AUDIO_OBJ) $(PACKET_OBJ)
+	rm -f $(CLIENT) $(SERVER) $(CLIENT_OBJ) $(SERVER_OBJ) $(AUDIO_OBJ) $(PACKET_OBJ) $(DROPBOX_OBJ)
