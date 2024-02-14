@@ -41,11 +41,11 @@ int main(int argc, char* argv[]) {
 
     printf("%s\n", client.bearer_token);
 
-    upload_file(&client, "Test.png", "asdsdad.tar.gz");
+    upload_file(&client, "test4.wav", "kkkkkk");
 
     client.role = SERVER;
 
-    download_file(&client, "asdsdad.tar.gz");
+    download_file(&client, "kkkkkk.tar.gz");
 
     return 1;
 

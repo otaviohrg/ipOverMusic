@@ -125,33 +125,75 @@ int auth(dropbox_client* client, char* client_id, char* client_secret, char* aut
 }
 
 //Upload function
-int upload_file(dropbox_client* client, char* file_path, char* uploaded_file_name){
+int upload_file(dropbox_client* client, char* file_name, char* uploaded_file_name){
     CURLcode res;
     CURL *hnd;
     struct curl_slist *headers;
 
-    printf("HERE F\n");
-
     //Process File
+    char *directory_path = (char *) malloc(
+            strlen("files/")+
+            6+
+            strlen("/send/"));
+    strcpy(directory_path, "files/");
+
+    if(client->role == CLIENT) strcat(directory_path, "client");
+    else if(client->role == SERVER) strcat(directory_path, "server");
+    else{
+        printf("Invalid entity\n");
+        return -1;
+    }
+
+    strcat(directory_path, "/send/");
+
+    char *file_path = (char *) malloc(
+            strlen(directory_path)+
+            strlen(file_name));
+    strcpy(file_path, directory_path);
+    strcat(file_path, file_name);
+
+    char *compressed_file = (char *) malloc(
+            strlen(uploaded_file_name)+
+            strlen(".tar.gz"));
+    strcpy(compressed_file, uploaded_file_name);
+    strcat(compressed_file, ".tar.gz");
+
+    char *compressed_file_path = (char *) malloc(
+            strlen(directory_path)+
+            strlen(compressed_file));
+    strcpy(compressed_file_path, directory_path);
+    strcat(compressed_file_path, compressed_file);
+
     char *command = (char*)malloc(
-            strlen("tar czvf send.tar.gz ")+
-            strlen(file_path)+1
+            strlen("tar czf ")+
+            strlen(compressed_file_path)+
+            strlen(" -C ")+
+            strlen(directory_path)+
+            strlen(file_name)+
+            strlen(" && rm ")+
+            strlen(file_path)
+            +2
     );
-    strcpy(command, "tar czvf send.tar.gz ");
+    strcpy(command, "tar czf ");
+    strcat(command, compressed_file_path);
+    strcat(command, " -C ");
+    strcat(command, directory_path);
+    strcat(command, " ");
+    strcat(command, file_name);
+    strcat(command, " && rm ");
     strcat(command, file_path);
+
     system(command);
-    FILE *file = fopen("send.tar.gz", "rb");
+
+    FILE *file = fopen(compressed_file_path, "rb");
     if (!file) {
         perror("Error opening file");
         return -1;
     }
-    printf("HERE E\n");
 
     fseek(file, 0, SEEK_END); // seek to end of file
     long size = ftell(file); // get current file pointer
     fseek(file, 0, SEEK_SET);
-
-    printf("HERE D - %ld\n", size);
 
     //Create Headers
     char *auth_header = (char*) malloc(
@@ -160,7 +202,7 @@ int upload_file(dropbox_client* client, char* file_path, char* uploaded_file_nam
             );
     char *args_header = (char*) malloc(
             strlen("Dropbox-API-Arg: {\"autorename\":false,\"mode\":\"add\",\"mute\":false,\"path\":\"") +
-            strlen(uploaded_file_name) +
+            strlen(compressed_file) +
             strlen("\",\"strict_conflict\":false}")
     );
     strcpy(auth_header, "Authorization: Bearer ");
@@ -173,7 +215,7 @@ int upload_file(dropbox_client* client, char* file_path, char* uploaded_file_nam
         printf("Invalid entity\n");
         return -1;
     }
-    strcat(args_header, uploaded_file_name);
+    strcat(args_header, compressed_file);
     strcat(args_header, "\",\"strict_conflict\":false}");
 
     // Create cURL command
@@ -247,6 +289,8 @@ int download_file(dropbox_client* client, char* file_name){
     strcpy(file_path, directory_path);
     strcat(file_path, file_name);
 
+    printf("%s\n", file_path);
+
     FILE *file = fopen(file_path, "wb");
     if (!file) {
         perror("Error opening file");
@@ -315,14 +359,14 @@ int download_file(dropbox_client* client, char* file_name){
 
     /* Decompress file */
     char *command = (char*)malloc(
-            strlen("tar -xvf ")+
+            strlen("tar -xf ")+
             strlen(file_path)+
             strlen(" -C ") +
             strlen(directory_path)+
             strlen(" && rm ") +
             strlen(file_path)
     );
-    strcpy(command, "tar -xvf ");
+    strcpy(command, "tar -xf ");
     strcat(command, file_path);
     strcat(command, " -C ");
     strcat(command, directory_path);

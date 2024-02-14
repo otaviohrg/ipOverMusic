@@ -43,7 +43,7 @@ int auth(dropbox_client* client, char* client_id, char* client_secret, char* aut
  * @return: -1 in case of any error and 0 otherwise
 */
 
-int upload_file(dropbox_client* client, char* file_path, char* uploaded_file_name);
+int upload_file(dropbox_client* client, char* file_name, char* uploaded_file_name);
 
 /**
  * Download function.
