@@ -4,6 +4,8 @@
 #include "stdlib.h"
 #include "string.h"
 #include <curl/curl.h>
+#include "json-c/json_tokener.h"
+#include "json-c/json_object.h"
 
 #include "../lib/dropbox.h"
 #include "../lib/json.h"
@@ -14,8 +16,7 @@
  * https://curl.se/libcurl/c/getinmemory.html
 */
 
-struct MemoryStruct
-{
+struct MemoryStruct{
     char *memory;
     size_t size;
 };
@@ -42,6 +43,12 @@ WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
     return realsize;
 }
 
+size_t write_data(void *ptr, size_t size, size_t nmemb, FILE *stream) {
+    size_t written = fwrite(ptr, size, nmemb, stream);
+    return written;
+}
+
+//Authenticate function
 int auth(dropbox_client* client, char* client_id, char* client_secret, char* authorization_code){
     CURLcode res;
     CURL *hnd;
@@ -102,55 +109,74 @@ int auth(dropbox_client* client, char* client_id, char* client_secret, char* aut
         return -1;
     }
 
+    printf("%s\n", chunk.memory);
+
     /* parse output to extract bearer token */
-    int ret = extract_json_value("\"access_token\"", &client->bearer_token, chunk.memory);
+    json_object *obj = json_tokener_parse(chunk.memory);
+    obj = json_object_object_get(obj, "access_token");
+    if(obj == NULL){
+        printf("Auth Error: Could not parse bearer token");
+        return -1;
+    }
+    client->bearer_token = (char*)json_object_get_string(obj);
 
-    return ret;
+    free(chunk.memory);
+    return 0;
 }
 
-size_t read_callback(void *ptr, size_t size, size_t nmemb, void *userdata) {
-    FILE *file = (FILE *)userdata;
-    return fread(ptr, size, nmemb, file);
-}
-
-int upload_file(dropbox_client* client, char* file_path, char* message_id){
+//Upload function
+int upload_file(dropbox_client* client, char* file_path, char* uploaded_file_name){
     CURLcode res;
     CURL *hnd;
     struct curl_slist *headers;
 
-    FILE *file = fopen(file_path, "rb");
+    printf("HERE F\n");
+
+    //Process File
+    char *command = (char*)malloc(
+            strlen("tar czvf send.tar.gz ")+
+            strlen(file_path)+1
+    );
+    strcpy(command, "tar czvf send.tar.gz ");
+    strcat(command, file_path);
+    system(command);
+    FILE *file = fopen("send.tar.gz", "rb");
     if (!file) {
         perror("Error opening file");
         return -1;
     }
+    printf("HERE E\n");
 
     fseek(file, 0, SEEK_END); // seek to end of file
-    int size = ftell(file); // get current file pointer
+    long size = ftell(file); // get current file pointer
     fseek(file, 0, SEEK_SET);
 
+    printf("HERE D - %ld\n", size);
+
+    //Create Headers
     char *auth_header = (char*) malloc(
         strlen("Authorization: Bearer ") +
-        strlen(client->bearer_token)
+        strlen(client->bearer_token)+1
             );
     char *args_header = (char*) malloc(
             strlen("Dropbox-API-Arg: {\"autorename\":false,\"mode\":\"add\",\"mute\":false,\"path\":\"") +
-            strlen(message_id) +
+            strlen(uploaded_file_name) +
             strlen("\",\"strict_conflict\":false}")
     );
-
     strcpy(auth_header, "Authorization: Bearer ");
     strcat(auth_header, client->bearer_token);
-
     strcpy(args_header, "Dropbox-API-Arg: {\"autorename\":false,\"mode\":\"add\",\"mute\":false,\"path\":\"");
-    if(client->id == CLIENT) strcat(args_header, "/client/");
-    else if(client->id == SERVER) strcat(args_header, "/server/");
+
+    if(client->role == CLIENT) strcat(args_header, "/client/");
+    else if(client->role == SERVER) strcat(args_header, "/server/");
     else{
         printf("Invalid entity\n");
         return -1;
     }
-    strcat(args_header, message_id);
+    strcat(args_header, uploaded_file_name);
     strcat(args_header, "\",\"strict_conflict\":false}");
 
+    // Create cURL command
     headers = NULL;
     headers = curl_slist_append(headers, auth_header);
     headers = curl_slist_append(headers, args_header);
@@ -162,7 +188,6 @@ int upload_file(dropbox_client* client, char* file_path, char* message_id){
     curl_easy_setopt(hnd, CURLOPT_NOPROGRESS, 1L);
     curl_easy_setopt(hnd, CURLOPT_POSTFIELDS, NULL);
     curl_easy_setopt(hnd, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)size);
-    curl_easy_setopt(hnd, CURLOPT_READFUNCTION, read_callback);
     curl_easy_setopt(hnd, CURLOPT_READDATA, (void *)file);
     curl_easy_setopt(hnd, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(hnd, CURLOPT_USERAGENT, "curl/8.2.1");
@@ -186,6 +211,132 @@ int upload_file(dropbox_client* client, char* file_path, char* message_id){
                 curl_easy_strerror(res));
         return -1;
     }
+
+    free(command);
+    free(auth_header);
+    free(args_header);
+
+    return 0;
+}
+
+//Download function
+int download_file(dropbox_client* client, char* file_name){
+    CURLcode res;
+    CURL *hnd;
+    struct curl_slist *headers;
+
+    //Process File
+    char *directory_path = (char *) malloc(
+            strlen("files/")+
+            6+
+            strlen("/receive/"));
+    strcpy(directory_path, "files/");
+
+    if(client->role == CLIENT) strcat(directory_path, "client");
+    else if(client->role == SERVER) strcat(directory_path, "server");
+    else{
+        printf("Invalid entity\n");
+        return -1;
+    }
+
+    strcat(directory_path, "/receive/");
+
+    char *file_path = (char *) malloc(
+            strlen(directory_path)+
+            strlen(file_name));
+    strcpy(file_path, directory_path);
+    strcat(file_path, file_name);
+
+    FILE *file = fopen(file_path, "wb");
+    if (!file) {
+        perror("Error opening file");
+        return -1;
+    }
+
+    //Create Headers
+    char *auth_header = (char*) malloc(
+            strlen("Authorization: Bearer ") +
+            strlen(client->bearer_token)
+    );
+    char *args_header = (char*) malloc(
+            strlen("Dropbox-API-Arg: {\"path\":\"/") +
+            7 +
+            strlen(file_name) +
+            strlen("\"}")
+    );
+    strcpy(auth_header, "Authorization: Bearer ");
+    strcat(auth_header, client->bearer_token);
+
+    strcpy(args_header, "Dropbox-API-Arg: {\"path\":\"/");
+
+    if(client->role == CLIENT) strcat(args_header, "server/");
+    else if(client->role == SERVER) strcat(args_header, "client/");
+    else{
+        printf("Invalid entity\n");
+        return -1;
+    }
+    strcat(args_header, file_name);
+    strcat(args_header, "\"}");
+
+    // Create cURL command
+    headers = NULL;
+    headers = curl_slist_append(headers, auth_header);
+    headers = curl_slist_append(headers, args_header);
+
+    hnd = curl_easy_init();
+    curl_easy_setopt(hnd, CURLOPT_BUFFERSIZE, 102400L);
+    curl_easy_setopt(hnd, CURLOPT_URL, "https://content.dropboxapi.com/2/files/download");
+    curl_easy_setopt(hnd, CURLOPT_NOPROGRESS, 1L);
+    curl_easy_setopt(hnd, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(hnd, CURLOPT_WRITEFUNCTION, write_data);
+    curl_easy_setopt(hnd, CURLOPT_WRITEDATA, file);
+    curl_easy_setopt(hnd, CURLOPT_USERAGENT, "curl/8.2.1");
+    curl_easy_setopt(hnd, CURLOPT_MAXREDIRS, 50L);
+    curl_easy_setopt(hnd, CURLOPT_HTTP_VERSION, (long)CURL_HTTP_VERSION_2TLS);
+    curl_easy_setopt(hnd, CURLOPT_CUSTOMREQUEST, "POST");
+    curl_easy_setopt(hnd, CURLOPT_FTP_SKIP_PASV_IP, 1L);
+    curl_easy_setopt(hnd, CURLOPT_TCP_KEEPALIVE, 1L);
+
+    res = curl_easy_perform(hnd);
+
+    fclose(file);
+    curl_easy_cleanup(hnd);
+    hnd = NULL;
+    curl_slist_free_all(headers);
+    headers = NULL;
+
+    /* check for errors */
+    if (res != CURLE_OK)
+    {
+        fprintf(stderr, "curl_easy_perform() failed: %s\n",
+                curl_easy_strerror(res));
+        return -1;
+    }
+
+    /* Decompress file */
+    char *command = (char*)malloc(
+            strlen("tar -xvf ")+
+            strlen(file_path)+
+            strlen(" -C ") +
+            strlen(directory_path)+
+            strlen(" && rm ") +
+            strlen(file_path)
+    );
+    strcpy(command, "tar -xvf ");
+    strcat(command, file_path);
+    strcat(command, " -C ");
+    strcat(command, directory_path);
+    strcat(command, " && rm ");
+    strcat(command, file_path);
+    printf("%s\n", command);
+    system(command);
+
+    /* Cleanup */
+    free(command);
+    free(auth_header);
+    free(args_header);
+    free(directory_path);
+    free(file_path);
 
     return 0;
 }

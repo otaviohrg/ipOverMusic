@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
     }
 
     dropbox_client client;
-    client.id = CLIENT;
+    client.role = CLIENT;
     char *client_id = argv[1];
     char *client_secret = argv[2];
     char *auth_code = argv[3];
@@ -41,7 +41,11 @@ int main(int argc, char* argv[]) {
 
     printf("%s\n", client.bearer_token);
 
-    upload_file(&client, "Test.png", "Test.png");
+    upload_file(&client, "Test.png", "asdsdad.tar.gz");
+
+    client.role = SERVER;
+
+    download_file(&client, "asdsdad.tar.gz");
 
     return 1;
 

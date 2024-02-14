@@ -2,6 +2,13 @@ CC = gcc
 CFLAGS = -Wall -Werror
 LDFLAGS = -lpulse-simple -lpulse -lm -lcurl
 
+JSON_C_DIR=/usr/local
+CFLAGS += -I$(JSON_C_DIR)/include/json-c
+LDFLAGS+= -L$(JSON_C_DIR)/lib -ljson-c
+
+CFLAGS += $(shell pkg-config --cflags json-c)
+LDFLAGS += $(shell pkg-config --libs json-c)
+
 SRC_DIR = src
 LIB_DIR = lib
 
@@ -29,13 +36,13 @@ JSON_OBJ = $(JSON_SRC:.c=.o)
 
 all: client server dropbox_tester
 
-client: $(CLIENT_OBJ) $(AUDIO_OBJ) $(PACKET_OBJ) $(DROPBOX_OBJ) $(JSON_OBJ)
+client: $(CLIENT_OBJ) $(AUDIO_OBJ) $(PACKET_OBJ) $(DROPBOX_OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-server: $(SERVER_OBJ) $(AUDIO_OBJ) $(PACKET_OBJ) $(DROPBOX_OBJ) $(JSON_OBJ)
+server: $(SERVER_OBJ) $(AUDIO_OBJ) $(PACKET_OBJ) $(DROPBOX_OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-dropbox_tester: $(DROPBOX_TESTER_OBJ) $(AUDIO_OBJ) $(PACKET_OBJ) $(DROPBOX_OBJ) $(JSON_OBJ)
+dropbox_tester: $(DROPBOX_TESTER_OBJ) $(AUDIO_OBJ) $(PACKET_OBJ) $(DROPBOX_OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 $(CLIENT_OBJ): $(CLIENT_SRC)
