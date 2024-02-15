@@ -65,7 +65,7 @@ int auth(dropbox_client* client, char* client_id, char* client_secret, char* aut
             strlen("&grant_type=authorization_code&client_id=")+
             strlen(client_id)+
             strlen("&client_secret=")+
-            strlen(client_secret)
+            strlen(client_secret) + 1
     );
 
     strcpy(parameters, "code=");
@@ -121,6 +121,8 @@ int auth(dropbox_client* client, char* client_id, char* client_secret, char* aut
     client->bearer_token = (char*)json_object_get_string(obj);
 
     free(chunk.memory);
+    free(parameters);
+
     return 0;
 }
 
@@ -271,21 +273,20 @@ int download_file(dropbox_client* client, char* file_name){
     char *directory_path = (char *) malloc(
             strlen("files/")+
             6+
-            strlen("/receive/"));
-    strcpy(directory_path, "files/");
+            strlen("/receive/") + 1);
 
+    strcpy(directory_path, "files/");
     if(client->role == CLIENT) strcat(directory_path, "client");
     else if(client->role == SERVER) strcat(directory_path, "server");
     else{
         printf("Invalid entity\n");
         return -1;
     }
-
     strcat(directory_path, "/receive/");
 
     char *file_path = (char *) malloc(
             strlen(directory_path)+
-            strlen(file_name));
+            strlen(file_name)+1);
     strcpy(file_path, directory_path);
     strcat(file_path, file_name);
 
@@ -300,19 +301,18 @@ int download_file(dropbox_client* client, char* file_name){
     //Create Headers
     char *auth_header = (char*) malloc(
             strlen("Authorization: Bearer ") +
-            strlen(client->bearer_token)
+            strlen(client->bearer_token) + 1
     );
     char *args_header = (char*) malloc(
             strlen("Dropbox-API-Arg: {\"path\":\"/") +
             7 +
             strlen(file_name) +
-            strlen("\"}")
+            strlen("\"}") + 1
     );
     strcpy(auth_header, "Authorization: Bearer ");
     strcat(auth_header, client->bearer_token);
 
     strcpy(args_header, "Dropbox-API-Arg: {\"path\":\"/");
-
     if(client->role == CLIENT) strcat(args_header, "server/");
     else if(client->role == SERVER) strcat(args_header, "client/");
     else{
@@ -364,7 +364,7 @@ int download_file(dropbox_client* client, char* file_name){
             strlen(" -C ") +
             strlen(directory_path)+
             strlen(" && rm ") +
-            strlen(file_path)
+            strlen(file_path) + 1
     );
     strcpy(command, "tar -xf ");
     strcat(command, file_path);
@@ -384,3 +384,71 @@ int download_file(dropbox_client* client, char* file_name){
 
     return 0;
 }
+
+int delete_file(dropbox_client* client, char* file_name){
+    CURLcode res;
+    CURL *hnd;
+    struct curl_slist *headers;
+
+    char *auth_header = (char*) malloc(
+            strlen("Authorization: Bearer ") +
+            strlen(client->bearer_token) + 1
+    );
+    strcpy(auth_header, "Authorization: Bearer ");
+    strcat(auth_header, client->bearer_token);
+
+    char *arg_path = (char*) malloc(
+            strlen("{\"path\":\"") +
+            7 +
+            strlen(file_name) +
+            strlen("\"}") + 1
+    );
+    strcpy(arg_path, "{\"path\":\"/");
+    if(client->role == CLIENT) strcat(arg_path, "server/");
+    else if(client->role == SERVER) strcat(arg_path, "client/");
+    else{
+        printf("Invalid entity\n");
+        return -1;
+    }
+    strcat(arg_path, file_name);
+    strcat(arg_path, "\"}");
+
+    headers = NULL;
+    headers = curl_slist_append(headers, auth_header);
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+
+    hnd = curl_easy_init();
+    curl_easy_setopt(hnd, CURLOPT_BUFFERSIZE, 102400L);
+    curl_easy_setopt(hnd, CURLOPT_URL, "https://api.dropboxapi.com/2/files/delete_v2");
+    curl_easy_setopt(hnd, CURLOPT_NOPROGRESS, 1L);
+    curl_easy_setopt(hnd, CURLOPT_POSTFIELDS, arg_path);
+    curl_easy_setopt(hnd, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) strlen(arg_path));
+    curl_easy_setopt(hnd, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(hnd, CURLOPT_USERAGENT, "curl/8.2.1");
+    curl_easy_setopt(hnd, CURLOPT_MAXREDIRS, 50L);
+    curl_easy_setopt(hnd, CURLOPT_HTTP_VERSION, (long)CURL_HTTP_VERSION_2TLS);
+    curl_easy_setopt(hnd, CURLOPT_FTP_SKIP_PASV_IP, 1L);
+    curl_easy_setopt(hnd, CURLOPT_TCP_KEEPALIVE, 1L);
+
+    res = curl_easy_perform(hnd);
+
+    curl_easy_cleanup(hnd);
+    hnd = NULL;
+    curl_slist_free_all(headers);
+    headers = NULL;
+
+    // check for errors
+    if (res != CURLE_OK)
+    {
+        fprintf(stderr, "curl_easy_perform() failed: %s\n",
+                curl_easy_strerror(res));
+        return -1;
+    }
+
+    // Cleanup
+    free(auth_header);
+    free(arg_path);
+
+    return 0;
+}
+

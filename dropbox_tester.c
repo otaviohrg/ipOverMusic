@@ -41,12 +41,14 @@ int main(int argc, char* argv[]) {
 
     printf("%s\n", client.bearer_token);
 
-    upload_file(&client, "test4.wav", "kkkkkk");
+    //upload_file(&client, "natello2.tar.gz", "natello2");
 
     client.role = SERVER;
 
-    download_file(&client, "kkkkkk.tar.gz");
+    //download_file(&client, "natello2.tar.gz");
+    delete_file(&client, "Carapaca");
 
+    free(client.bearer_token);
     return 1;
 
 }

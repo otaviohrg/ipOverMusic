@@ -56,4 +56,6 @@ int upload_file(dropbox_client* client, char* file_name, char* uploaded_file_nam
 
 int download_file(dropbox_client* client, char* file_name);
 
+int delete_file(dropbox_client* client, char* file_name);
+
 #endif //IPOVERMUSIC_DROPBOX_H
